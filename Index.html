@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Web Serial Current Monitor</title>
+    <style>
+        body { font-family: monospace; background: #111; color: #0f0; padding: 20px; }
+        #output { width: 100%; height: 400px; background: black; padding: 10px; overflow-y: scroll; }
+        button { margin: 5px; padding: 10px; }
+    </style>
+</head>
+<body>
+
+<h2>Current Monitor Web Terminal</h2>
+
+<button onclick="connectSerial()">Connect</button>
+<button onclick="disconnectSerial()">Disconnect</button>
+<button onclick="sendLF()">Send LF</button>
+<button onclick="sendM()">Send M?</button>
+<button onclick="startTrial()">Start Trial</button>
+<button onclick="stopTrial()">Stop Trial</button>
+
+<pre id="output"></pre>
+
+<script>
+let port;
+let writer;
+let reader;
+let running = false;
+
+async function connectSerial() {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+
+    writer = port.writable.getWriter();
+    reader = port.readable.getReader();
+
+    readLoop();
+}
+
+async function disconnectSerial() {
+    running = false;
+    if (reader) reader.releaseLock();
+    if (writer) writer.releaseLock();
+    if (port) await port.close();
+}
+
+async function sendLF() {
+    await writer.write(new TextEncoder().encode("\n"));
+}
+
+async function sendM() {
+    await writer.write(new TextEncoder().encode("M?\n"));
+}
+
+function startTrial() {
+    running = true;
+    pollLoop();
+}
+
+function stopTrial() {
+    running = false;
+}
+
+async function pollLoop() {
+    while (running) {
+        await writer.write(new TextEncoder().encode("M?\n"));
+        await new Promise(r => setTimeout(r, 100));
+    }
+}
+
+async function readLoop() {
+    const decoder = new TextDecoder();
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) {
+            let text = decoder.decode(value).trim();
+            if (text.length > 0) {
+                let out = document.getElementById("output");
+                out.textContent += text + " A\n";
+                out.scrollTop = out.scrollHeight;
+            }
+        }
+    }
+}
+</script>
+
+</body>
+</html>
